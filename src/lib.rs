@@ -24,8 +24,27 @@
 //!     Ok((_, CommandReply::GetValuesSelective(values))) => {
 //!         let rpm = values.rpm;
 //!         let voltage_in = values.voltage_in;
-//!     }
+//!     },
 //!     _ => (),
+//! }
+//! ```
+//!
+//! ## Decoding a Stream
+//!
+//! ```no_run
+//! use vesc::{Decoder, CommandReply};
+//!
+//! let mut decoder = Decoder::default();
+//! decoder.feed(&[2, 7, 50, 0, 0, 1, 128, 0, 0, 4, 210, 1, 176, 254, 22, 3]);
+//!
+//! for reply in decoder.by_ref() {
+//!     match reply {
+//!         CommandReply::GetValuesSelective(values) => {
+//!             let rpm = values.rpm;
+//!             let voltage_in = values.voltage_in;
+//!         },
+//!         _ => (),
+//!     }
 //! }
 //! ```
 #![cfg_attr(not(feature = "std"), no_std)]
