@@ -1,6 +1,6 @@
 use googletest::prelude::*;
 
-use vesc::{CommandReply, DecodeError, Values};
+use vesc::{CommandReply, DecodeError, FaultCode, Values};
 
 #[test]
 fn decode_get_values_zero_rpm() {
@@ -28,7 +28,7 @@ fn decode_get_values_zero_rpm() {
             watt_hours_charged: approx_eq(0.0),
             tachometer: eq(-31936),
             tachometer_abs: eq(174334),
-            fault_code: eq(0),
+            fault_code: eq(FaultCode::None),
             pid_pos: approx_eq(302.39996),
             controller_id: eq(20),
             temp_mosfet1: approx_eq(27.7),
@@ -69,7 +69,7 @@ fn decode_get_values_forward_rpm() {
             watt_hours_charged: approx_eq(0.0),
             tachometer: eq(-37045),
             tachometer_abs: eq(171975),
-            fault_code: eq(0),
+            fault_code: eq(FaultCode::None),
             pid_pos: approx_eq(74.08746),
             controller_id: eq(1),
             temp_mosfet1: approx_eq(27.7),
@@ -110,7 +110,48 @@ fn decode_get_values_reverse_rpm() {
             watt_hours_charged: approx_eq(0.0),
             tachometer: eq(-28230),
             tachometer_abs: eq(133952),
-            fault_code: eq(0),
+            fault_code: eq(FaultCode::None),
+            pid_pos: approx_eq(233.10513),
+            controller_id: eq(20),
+            temp_mosfet1: approx_eq(26.9),
+            temp_mosfet2: approx_eq(-90.9),
+            temp_mosfet3: approx_eq(-94.8),
+            avg_voltage_d: approx_eq(0.23),
+            avg_voltage_q: approx_eq(-3.967),
+            status: eq(0),
+        }))),
+    );
+    assert_that!(vesc::decode(&input), ok(expected));
+}
+
+#[test]
+fn decode_get_values_motor_fault() {
+    let input = [
+        2, 74, 4, 1, 13, 0, 0, 0, 0, 0, 92, 0, 0, 0, 12, 0, 0, 0, 0, 255, 255, 255, 169, 255, 19,
+        255, 255, 247, 94, 1, 117, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0, 1, 18, 0, 0, 0, 0, 255, 255, 145,
+        186, 0, 2, 11, 64, 2, 13, 228, 230, 240, 20, 1, 13, 252, 115, 252, 76, 0, 0, 0, 230, 255,
+        255, 240, 129, 0, 183, 254, 3,
+    ];
+
+    let expected = (
+        eq(&79),
+        pat!(&CommandReply::GetValues(pat!(Values {
+            temp_mosfet: approx_eq(26.9),
+            temp_motor: approx_eq(0.0),
+            avg_current_motor: approx_eq(0.92),
+            avg_current_input: approx_eq(0.12),
+            avg_current_d: approx_eq(0.0),
+            avg_current_q: approx_eq(-0.87),
+            duty_cycle: approx_eq(-0.237),
+            rpm: approx_eq(-2210.0),
+            voltage_in: approx_eq(37.3),
+            amp_hours: approx_eq(0.0007),
+            amp_hours_charged: approx_eq(0.0),
+            watt_hours: approx_eq(0.0274),
+            watt_hours_charged: approx_eq(0.0),
+            tachometer: eq(-28230),
+            tachometer_abs: eq(133952),
+            fault_code: eq(FaultCode::UnderVoltage),
             pid_pos: approx_eq(233.10513),
             controller_id: eq(20),
             temp_mosfet1: approx_eq(26.9),
@@ -138,7 +179,7 @@ fn decode_get_values_selective_zero_rpm() {
             rpm: approx_eq(0.0),
             voltage_in: approx_eq(38.4),
             tachometer: eq(-25018),
-            fault_code: eq(0),
+            fault_code: eq(FaultCode::None),
             controller_id: eq(1),
             ..
         }))),
@@ -160,7 +201,7 @@ fn decode_get_values_selective_forward_rpm() {
             rpm: approx_eq(989.0),
             voltage_in: approx_eq(37.5),
             tachometer: eq(-21973),
-            fault_code: eq(0),
+            fault_code: eq(FaultCode::None),
             controller_id: eq(20),
             ..
         }))),
@@ -182,7 +223,29 @@ fn decode_get_values_selective_reverse_rpm() {
             rpm: approx_eq(-2347.0),
             voltage_in: approx_eq(37.4),
             tachometer: eq(-18982),
-            fault_code: eq(0),
+            fault_code: eq(FaultCode::None),
+            controller_id: eq(20),
+            ..
+        }))),
+    );
+    assert_that!(vesc::decode(&input), ok(expected));
+}
+
+#[test]
+fn decode_get_values_selective_fault_code() {
+    let input = [
+        2, 23, 50, 0, 2, 161, 138, 0, 0, 0, 0, 0, 10, 255, 255, 246, 213, 1, 118, 255, 255, 181,
+        218, 4, 20, 146, 70, 3,
+    ];
+
+    let expected = (
+        eq(&28),
+        pat!(&CommandReply::GetValuesSelective(pat!(Values {
+            avg_current_input: approx_eq(0.1),
+            rpm: approx_eq(-2347.0),
+            voltage_in: approx_eq(37.4),
+            tachometer: eq(-18982),
+            fault_code: eq(FaultCode::AbsOverCurrent),
             controller_id: eq(20),
             ..
         }))),

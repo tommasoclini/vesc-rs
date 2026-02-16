@@ -1,5 +1,5 @@
 use googletest::prelude::*;
-use vesc::{CommandReply, Decoder, Values};
+use vesc::{CommandReply, Decoder, FaultCode, Values};
 
 #[test]
 fn decoder_decodes_single_packet() {
@@ -16,7 +16,7 @@ fn decoder_decodes_single_packet() {
         rpm: approx_eq(989.0),
         voltage_in: approx_eq(37.5),
         tachometer: eq(-21973),
-        fault_code: eq(0),
+        fault_code: eq(FaultCode::None),
         controller_id: eq(20),
         ..
     })));
@@ -53,7 +53,7 @@ fn decoder_decodes_packet_fed_in_chunks() {
         watt_hours_charged: approx_eq(0.0),
         tachometer: eq(-37045),
         tachometer_abs: eq(171975),
-        fault_code: eq(0),
+        fault_code: eq(FaultCode::None),
         pid_pos: approx_eq(74.08746),
         controller_id: eq(1),
         temp_mosfet1: approx_eq(27.7),
@@ -99,7 +99,7 @@ fn decoder_returns_none_until_packet_is_complete() {
         watt_hours_charged: approx_eq(0.0),
         tachometer: eq(-37045),
         tachometer_abs: eq(171975),
-        fault_code: eq(0),
+        fault_code: eq(FaultCode::None),
         pid_pos: approx_eq(74.08746),
         controller_id: eq(1),
         temp_mosfet1: approx_eq(27.7),
@@ -127,7 +127,7 @@ fn decoder_decodes_two_packets_from_single_feed() {
         rpm: approx_eq(0.0),
         voltage_in: approx_eq(38.4),
         tachometer: eq(-25018),
-        fault_code: eq(0),
+        fault_code: eq(FaultCode::None),
         controller_id: eq(1),
         ..
     })));
@@ -138,7 +138,7 @@ fn decoder_decodes_two_packets_from_single_feed() {
         rpm: approx_eq(989.0),
         voltage_in: approx_eq(37.5),
         tachometer: eq(-21973),
-        fault_code: eq(0),
+        fault_code: eq(FaultCode::None),
         controller_id: eq(20),
         ..
     })));
@@ -165,7 +165,7 @@ fn decoder_decodes_two_packets_from_separate_feeds() {
         rpm: approx_eq(0.0),
         voltage_in: approx_eq(38.4),
         tachometer: eq(-25018),
-        fault_code: eq(0),
+        fault_code: eq(FaultCode::None),
         controller_id: eq(1),
         ..
     })));
@@ -176,7 +176,7 @@ fn decoder_decodes_two_packets_from_separate_feeds() {
         rpm: approx_eq(989.0),
         voltage_in: approx_eq(37.5),
         tachometer: eq(-21973),
-        fault_code: eq(0),
+        fault_code: eq(FaultCode::None),
         controller_id: eq(20),
         ..
     })));
@@ -231,7 +231,7 @@ fn decoder_skips_junk_bytes_between_packets() {
         rpm: approx_eq(0.0),
         voltage_in: approx_eq(38.4),
         tachometer: eq(-25018),
-        fault_code: eq(0),
+        fault_code: eq(FaultCode::None),
         controller_id: eq(1),
         ..
     })));
@@ -242,7 +242,7 @@ fn decoder_skips_junk_bytes_between_packets() {
         rpm: approx_eq(989.0),
         voltage_in: approx_eq(37.5),
         tachometer: eq(-21973),
-        fault_code: eq(0),
+        fault_code: eq(FaultCode::None),
         controller_id: eq(20),
         ..
     })));
@@ -264,7 +264,7 @@ fn decoder_recovers_from_false_start_byte() {
         rpm: approx_eq(989.0),
         voltage_in: approx_eq(37.5),
         tachometer: eq(-21973),
-        fault_code: eq(0),
+        fault_code: eq(FaultCode::None),
         controller_id: eq(20),
         ..
     })));
@@ -321,7 +321,7 @@ fn decoder_iterator_collects_all_valid_packets() {
             watt_hours_charged: approx_eq(0.0),
             tachometer: eq(-37045),
             tachometer_abs: eq(171975),
-            fault_code: eq(0),
+            fault_code: eq(FaultCode::None),
             pid_pos: approx_eq(74.08746),
             controller_id: eq(1),
             temp_mosfet1: approx_eq(27.7),
@@ -336,7 +336,7 @@ fn decoder_iterator_collects_all_valid_packets() {
             rpm: approx_eq(-2347.0),
             voltage_in: approx_eq(37.4),
             tachometer: eq(-18982),
-            fault_code: eq(0),
+            fault_code: eq(FaultCode::None),
             controller_id: eq(20),
             ..
         }))),
