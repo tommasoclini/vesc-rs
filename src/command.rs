@@ -184,7 +184,6 @@ impl<'a> Command<'a> {
 /// calling [`Command::GetValues`] or [`Command::GetValuesSelective`].
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[non_exhaustive]
 #[repr(u8)]
 pub enum FaultCode {
     #[default]
@@ -221,9 +220,50 @@ pub enum FaultCode {
     Unknown = 255,
 }
 
+impl FaultCode {
+    pub fn as_str(&self) -> &'static str {
+        use FaultCode::*;
+
+        match self {
+            None => "FAULT_CODE_NONE",
+            OverVoltage => "FAULT_CODE_OVER_VOLTAGE",
+            UnderVoltage => "FAULT_CODE_UNDER_VOLTAGE",
+            Drv => "FAULT_CODE_DRV",
+            AbsOverCurrent => "FAULT_CODE_ABS_OVER_CURRENT",
+            OverTempFet => "FAULT_CODE_OVER_TEMP_FET",
+            OverTempMotor => "FAULT_CODE_OVER_TEMP_MOTOR",
+            GateDriverOverVoltage => "FAULT_CODE_GATE_DRIVER_OVER_VOLTAGE",
+            GateDriverUnderVoltage => "FAULT_CODE_GATE_DRIVER_UNDER_VOLTAGE",
+            McuUnderVoltage => "FAULT_CODE_MCU_UNDER_VOLTAGE",
+            BootingFromWatchdogReset => "FAULT_CODE_BOOTING_FROM_WATCHDOG_RESET",
+            EncoderSpi => "FAULT_CODE_ENCODER_SPI",
+            EncoderSinCosBelowMinAmplitude => "FAULT_CODE_ENCODER_SINCOS_BELOW_MIN_AMPLITUDE",
+            EncoderSinCosAboveMaxAmplitude => "FAULT_CODE_ENCODER_SINCOS_ABOVE_MAX_AMPLITUDE",
+            FlashCorruption => "FAULT_CODE_FLASH_CORRUPTION",
+            HighOffsetCurrentSensor1 => "FAULT_CODE_HIGH_OFFSET_CURRENT_SENSOR_1",
+            HighOffsetCurrentSensor2 => "FAULT_CODE_HIGH_OFFSET_CURRENT_SENSOR_2",
+            HighOffsetCurrentSensor3 => "FAULT_CODE_HIGH_OFFSET_CURRENT_SENSOR_3",
+            UnbalancedCurrents => "FAULT_CODE_UNBALANCED_CURRENTS",
+            Brk => "FAULT_CODE_BRK",
+            ResolverLot => "FAULT_CODE_RESOLVER_LOT",
+            ResolverDos => "FAULT_CODE_RESOLVER_DOS",
+            ResolverLos => "FAULT_CODE_RESOLVER_LOS",
+            FlashCorruptionAppCfg => "FAULT_CODE_FLASH_CORRUPTION_APP_CFG",
+            FlashCorruptionMcCfg => "FAULT_CODE_FLASH_CORRUPTION_MC_CFG",
+            EncoderNoMagnet => "FAULT_CODE_ENCODER_NO_MAGNET",
+            EncoderMagnetTooStrong => "FAULT_CODE_ENCODER_MAGNET_TOO_STRONG",
+            PhaseFilter => "FAULT_CODE_PHASE_FILTER",
+            EncoderFault => "FAULT_CODE_ENCODER_FAULT",
+            LvOutputFault => "FAULT_CODE_LV_OUTPUT_FAULT",
+            Unknown => "UNKNOWN",
+        }
+    }
+}
+
 impl From<u8> for FaultCode {
     fn from(value: u8) -> Self {
         use FaultCode::*;
+
         match value {
             v if v == None as u8 => None,
             v if v == OverVoltage as u8 => OverVoltage,
