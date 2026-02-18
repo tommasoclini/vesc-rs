@@ -35,6 +35,15 @@ mod decoder;
 mod packer;
 
 pub use command::{
-    Command, CommandReply, DecodeError, EncodeError, Values, ValuesMask, decode, encode,
+    //
+    Command,
+    CommandReply,
+    DecodeError,
+    EncodeError,
+    FaultCode,
+    Values,
+    ValuesMask,
+    decode,
+    encode,
 };
 pub use decoder::Decoder;

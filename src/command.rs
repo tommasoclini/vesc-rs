@@ -178,6 +178,88 @@ impl<'a> Command<'a> {
     }
 }
 
+/// Indicates specific error conditions or hardware failures.
+///
+/// Fault codes are typically retrieved as part of the [`Values`] struct when
+/// calling [`Command::GetValues`] or [`Command::GetValuesSelective`].
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[non_exhaustive]
+#[repr(u8)]
+pub enum FaultCode {
+    #[default]
+    None = 0,
+    OverVoltage,
+    UnderVoltage,
+    Drv,
+    AbsOverCurrent,
+    OverTempFet,
+    OverTempMotor,
+    GateDriverOverVoltage,
+    GateDriverUnderVoltage,
+    McuUnderVoltage,
+    BootingFromWatchdogReset,
+    EncoderSpi,
+    EncoderSinCosBelowMinAmplitude,
+    EncoderSinCosAboveMaxAmplitude,
+    FlashCorruption,
+    HighOffsetCurrentSensor1,
+    HighOffsetCurrentSensor2,
+    HighOffsetCurrentSensor3,
+    UnbalancedCurrents,
+    Brk,
+    ResolverLot,
+    ResolverDos,
+    ResolverLos,
+    FlashCorruptionAppCfg,
+    FlashCorruptionMcCfg,
+    EncoderNoMagnet,
+    EncoderMagnetTooStrong,
+    PhaseFilter,
+    EncoderFault,
+    LvOutputFault,
+    Unknown = 255,
+}
+
+impl From<u8> for FaultCode {
+    fn from(value: u8) -> Self {
+        use FaultCode::*;
+        match value {
+            v if v == None as u8 => None,
+            v if v == OverVoltage as u8 => OverVoltage,
+            v if v == UnderVoltage as u8 => UnderVoltage,
+            v if v == Drv as u8 => Drv,
+            v if v == AbsOverCurrent as u8 => AbsOverCurrent,
+            v if v == OverTempFet as u8 => OverTempFet,
+            v if v == OverTempMotor as u8 => OverTempMotor,
+            v if v == GateDriverOverVoltage as u8 => GateDriverOverVoltage,
+            v if v == GateDriverUnderVoltage as u8 => GateDriverUnderVoltage,
+            v if v == McuUnderVoltage as u8 => McuUnderVoltage,
+            v if v == BootingFromWatchdogReset as u8 => BootingFromWatchdogReset,
+            v if v == EncoderSpi as u8 => EncoderSpi,
+            v if v == EncoderSinCosBelowMinAmplitude as u8 => EncoderSinCosBelowMinAmplitude,
+            v if v == EncoderSinCosAboveMaxAmplitude as u8 => EncoderSinCosAboveMaxAmplitude,
+            v if v == FlashCorruption as u8 => FlashCorruption,
+            v if v == HighOffsetCurrentSensor1 as u8 => HighOffsetCurrentSensor1,
+            v if v == HighOffsetCurrentSensor2 as u8 => HighOffsetCurrentSensor2,
+            v if v == HighOffsetCurrentSensor3 as u8 => HighOffsetCurrentSensor3,
+            v if v == UnbalancedCurrents as u8 => UnbalancedCurrents,
+            v if v == Brk as u8 => Brk,
+            v if v == ResolverLot as u8 => ResolverLot,
+            v if v == ResolverDos as u8 => ResolverDos,
+            v if v == ResolverLos as u8 => ResolverLos,
+            v if v == FlashCorruptionAppCfg as u8 => FlashCorruptionAppCfg,
+            v if v == FlashCorruptionMcCfg as u8 => FlashCorruptionMcCfg,
+            v if v == EncoderNoMagnet as u8 => EncoderNoMagnet,
+            v if v == EncoderMagnetTooStrong as u8 => EncoderMagnetTooStrong,
+            v if v == PhaseFilter as u8 => PhaseFilter,
+            v if v == EncoderFault as u8 => EncoderFault,
+            v if v == LvOutputFault as u8 => LvOutputFault,
+            _ => Unknown,
+        }
+    }
+}
+
 /// Telemetry data returned by the motor controller.
 ///
 /// Contains temperatures, currents, voltages, rpm, and so on. Returned by
@@ -203,7 +285,7 @@ pub struct Values {
     pub watt_hours_charged: f32,
     pub tachometer: i32,
     pub tachometer_abs: i32,
-    pub fault_code: u8,
+    pub fault_code: FaultCode,
     pub pid_pos: f32,
     pub controller_id: u8,
     pub temp_mosfet1: f32,
@@ -257,7 +339,7 @@ impl CommandReply {
             watt_hours_charged: unpacker.unpack_f32(10000.0)?,
             tachometer: unpacker.unpack_i32()?,
             tachometer_abs: unpacker.unpack_i32()?,
-            fault_code: unpacker.unpack_u8()?,
+            fault_code: unpacker.unpack_u8()?.into(),
             pid_pos: unpacker.unpack_f32(1000000.0)?,
             controller_id: unpacker.unpack_u8()?,
             temp_mosfet1: unpacker.unpack_f16(10.0)?,
@@ -320,7 +402,7 @@ impl CommandReply {
             values.tachometer_abs = unpacker.unpack_i32()?;
         }
         if mask.contains(ValuesMask::FAULT_CODE) {
-            values.fault_code = unpacker.unpack_u8()?;
+            values.fault_code = unpacker.unpack_u8()?.into();
         }
         if mask.contains(ValuesMask::PID_POS) {
             values.pid_pos = unpacker.unpack_f32(1000000.0)?;
