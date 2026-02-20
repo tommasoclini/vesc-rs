@@ -44,10 +44,10 @@ impl<'a> Packer<'a> {
     #[inline]
     fn pack(&mut self, bytes: &[u8]) -> Result<(), EncodeError> {
         let need = bytes.len();
-        if self.pos + need > self.buf.len() {
-            return Err(EncodeError::BufferTooSmall);
-        }
-        self.buf[self.pos..self.pos + need].copy_from_slice(bytes);
+        self.buf
+            .get_mut(self.pos..self.pos + need)
+            .ok_or(EncodeError::BufferTooSmall)?
+            .copy_from_slice(bytes);
         self.pos += need;
         Ok(())
     }
@@ -106,10 +106,9 @@ impl<'a> Unpacker<'a> {
 
     #[inline]
     fn consume(&mut self, amount: usize) -> Result<&[u8], DecodeError> {
-        if self.pos + amount > self.buf.len() {
-            return Err(DecodeError::IncompleteData);
-        }
-        self.pos += amount;
-        Ok(&self.buf[self.pos - amount..self.pos])
+        self.buf
+            .get(self.pos..self.pos + amount)
+            .inspect(|_| self.pos += amount)
+            .ok_or(DecodeError::IncompleteData)
     }
 }

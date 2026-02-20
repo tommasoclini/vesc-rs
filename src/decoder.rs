@@ -61,7 +61,10 @@ impl<const BUFLEN: usize> Decoder<BUFLEN> {
         }
 
         let copied = data.len().min(self.buf.len().saturating_sub(self.wpos));
-        self.buf[self.wpos..self.wpos + copied].copy_from_slice(&data[..copied]);
+        self.buf
+            .get_mut(self.wpos..self.wpos + copied)
+            .ok_or(DecodeError::Internal)?
+            .copy_from_slice(data.get(..copied).ok_or(DecodeError::Internal)?);
         self.wpos += copied;
         Ok(copied)
     }

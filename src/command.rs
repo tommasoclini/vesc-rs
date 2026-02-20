@@ -31,6 +31,9 @@ pub enum DecodeError {
 
     #[error("the frame structure is frame")]
     InvalidFrame,
+
+    #[error("internal error, something is broken in the Decoding logic")]
+    Internal,
 }
 
 #[repr(u8)]
@@ -490,8 +493,15 @@ pub fn encode(command: Command, buf: &mut [u8]) -> Result<usize, EncodeError> {
     packer.pack_u8(0)?;
     command.pack_into(&mut packer)?;
     let payload_len = packer.pos - 2;
-    packer.buf[1] = payload_len as u8;
-    packer.pack_u16(CRC16.checksum(&packer.buf[2..2 + payload_len]))?;
+    *packer.buf.get_mut(1).ok_or(EncodeError::BufferTooSmall)? = payload_len as u8;
+    packer.pack_u16(
+        CRC16.checksum(
+            packer
+                .buf
+                .get(2..2 + payload_len)
+                .ok_or(EncodeError::BufferTooSmall)?,
+        ),
+    )?;
     packer.pack_u8(FRAME_END)?;
     Ok(packer.pos)
 }
@@ -531,7 +541,10 @@ pub fn decode(buf: &[u8]) -> Result<(usize, CommandReply), DecodeError> {
     if payload_len != unpacker.pos - (frame_start as usize) {
         return Err(DecodeError::InvalidFrame);
     }
-    let payload = &unpacker.buf[(frame_start as usize)..unpacker.pos];
+    let payload = &unpacker
+        .buf
+        .get((frame_start as usize)..unpacker.pos)
+        .ok_or(DecodeError::IncompleteData)?;
     let checksum_expected = unpacker.unpack_u16()?;
     if unpacker.unpack_u8()? != FRAME_END {
         return Err(DecodeError::InvalidFrame);
