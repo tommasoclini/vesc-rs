@@ -2,6 +2,11 @@ use bitflags::bitflags;
 
 use super::packer::{Packer, Unpacker};
 
+#[cfg(feature = "postcard-schema")]
+use postcard_schema::Schema;
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 const CRC16: crc::Crc<u16> = crc::Crc::<u16>::new(&crc::CRC_16_XMODEM);
 const FRAME_END: u8 = 3;
 const FRAME_START_SHORT: u8 = 2;
@@ -197,6 +202,8 @@ impl<'a> Command<'a> {
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[repr(u8)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "postcard-schema", derive(Schema))]
 pub enum FaultCode {
     #[default]
     None = 0,
@@ -321,6 +328,8 @@ impl From<u8> for FaultCode {
 /// [`ValuesMask`] are populated; all others remain at their default.
 #[derive(Debug, Copy, Clone, Default)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "postcard-schema", derive(Schema))]
 pub struct Values {
     pub temp_mosfet: f32,
     pub temp_motor: f32,

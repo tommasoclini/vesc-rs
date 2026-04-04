@@ -18,11 +18,15 @@ categories = [
 [features]
 defmt = ["dep:defmt"]
 std = ["bitflags/std", "thiserror/std"]
+serde = ["dep:serde"]
+postcard-schema = ["dep:postcard-schema"]
 
 [dependencies]
 bitflags = { version = "2.9" }
 crc = { version = "3.3" }
 defmt = { version = "1.0", optional = true }
+postcard-schema = { version = "0.2.5", features = ["derive"], optional = true }
+serde = { version = "1.0.228", default-features = false, features = ["derive"], optional = true }
 thiserror = { version = "2.0", default-features = false }
 
 [dev-dependencies]
