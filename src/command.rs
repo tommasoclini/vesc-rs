@@ -70,6 +70,26 @@ enum CommandId {
     MotorEstop = 159,
 }
 
+impl CommandId {
+    fn has_reply(&self) -> bool {
+        #[allow(clippy::enum_glob_use)]
+        use CommandId::*;
+
+        match self {
+            FwVersion
+            | GetValues
+            | GetValuesSelective
+            | GetValuesSetupSelective
+            | ResetStats
+            | FwInfo => true,
+
+            SetDuty | SetCurrent | SetCurrentBrake | SetRpm | SetPos | SetHandbrake | Reboot
+            | Alive | ForwardCan | SetCurrentRel | SetOdometer | GetStats | Shutdown
+            | MotorEstop => false,
+        }
+    }
+}
+
 impl TryFrom<u8> for CommandId {
     type Error = DecodeError;
 
@@ -289,88 +309,68 @@ pub enum Command<'a> {
     MotorEstop(u16),
 }
 
-impl<'a> Command<'a> {
+impl Command<'_> {
     fn pack_into(&self, packer: &mut Packer) -> Result<(), EncodeError> {
+        packer.pack_u8(self.id() as u8)?;
+
         match self {
-            Self::FwVersion => {
-                packer.pack_u8(CommandId::FwVersion as u8)?;
+            Self::SetDuty(duty) => packer.pack_f32(*duty, 100_000.0),
+            Self::SetCurrent(current) | Self::SetCurrentBrake(current) => {
+                packer.pack_f32(*current, 1000.0)
             }
-            Self::GetValues => {
-                packer.pack_u8(CommandId::GetValues as u8)?;
-            }
-            Self::SetDuty(duty) => {
-                packer.pack_u8(CommandId::SetDuty as u8)?;
-                packer.pack_f32(*duty, 100000.0)?;
-            }
-            Self::SetCurrent(current) => {
-                packer.pack_u8(CommandId::SetCurrent as u8)?;
-                packer.pack_f32(*current, 1000.0)?;
-            }
-            Self::SetCurrentBrake(current) => {
-                packer.pack_u8(CommandId::SetCurrentBrake as u8)?;
-                packer.pack_f32(*current, 1000.0)?;
-            }
-            Self::SetRpm(rpm) => {
-                packer.pack_u8(CommandId::SetRpm as u8)?;
-                packer.pack_i32(*rpm)?;
-            }
-            Self::SetPos(pos) => {
-                packer.pack_u8(CommandId::SetPos as u8)?;
-                packer.pack_f32(*pos, 1000000.0)?;
-            }
-            Self::SetHandbrake(current) => {
-                packer.pack_u8(CommandId::SetHandbrake as u8)?;
-                packer.pack_f32(*current, 1000.0)?;
-            }
-            Self::Reboot => {
-                packer.pack_u8(CommandId::Reboot as u8)?;
-            }
-            Self::Alive => {
-                packer.pack_u8(CommandId::Alive as u8)?;
-            }
+            Self::SetRpm(rpm) => packer.pack_i32(*rpm),
+            Self::SetPos(pos) => packer.pack_f32(*pos, 100_0000.0),
+            Self::SetHandbrake(current) => packer.pack_f32(*current, 1000.0),
             Self::ForwardCan(controller_id, command) => {
-                packer.pack_u8(CommandId::ForwardCan as u8)?;
                 packer.pack_u8(*controller_id)?;
-                command.pack_into(packer)?;
+                command.pack_into(packer)
             }
-            Self::GetValuesSelective(mask) => {
-                packer.pack_u8(CommandId::GetValuesSelective as u8)?;
-                packer.pack_u32(mask.bits())?;
-            }
-            Self::GetValuesSetupSelective(mask) => {
-                packer.pack_u8(CommandId::GetValuesSetupSelective as u8)?;
-                packer.pack_u32(mask.bits())?;
-            }
-            Self::SetCurrentRel(current_rel) => {
-                packer.pack_u8(CommandId::SetCurrentRel as u8)?;
-                packer.pack_f32(*current_rel, 100000.0)?;
-            }
-            Self::SetOdometer(odometer) => {
-                packer.pack_u8(CommandId::SetOdometer as u8)?;
-                packer.pack_u32(*odometer)?;
-            }
-            Self::GetStats(mask) => {
-                packer.pack_u8(CommandId::GetStats as u8)?;
-                packer.pack_u16(mask.bits())?;
-            }
-            Self::ResetStats(ack) => {
-                packer.pack_u8(CommandId::ResetStats as u8)?;
-                packer.pack_u8(*ack as u8)?;
-            }
+            Self::GetValuesSelective(mask) => packer.pack_u32(mask.bits()),
+            Self::GetValuesSetupSelective(mask) => packer.pack_u32(mask.bits()),
+            Self::SetCurrentRel(current_rel) => packer.pack_f32(*current_rel, 100_000.0),
+            Self::SetOdometer(odometer) => packer.pack_u32(*odometer),
+            Self::GetStats(mask) => packer.pack_u16(mask.bits()),
+            Self::ResetStats(ack) => packer.pack_u8(u8::from(*ack)),
             Self::Shutdown(force, restart) => {
-                packer.pack_u8(CommandId::Shutdown as u8)?;
-                packer.pack_u8(*force as u8)?;
-                packer.pack_u8(*restart as u8)?;
+                packer.pack_u8(u8::from(*force))?;
+                packer.pack_u8(u8::from(*restart))
             }
-            Self::FwInfo => {
-                packer.pack_u8(CommandId::FwInfo as u8)?;
-            }
-            Self::MotorEstop(ignore_time_ms) => {
-                packer.pack_u8(CommandId::MotorEstop as u8)?;
-                packer.pack_u16(*ignore_time_ms)?;
-            }
+            Self::MotorEstop(ignore_time_ms) => packer.pack_u16(*ignore_time_ms),
+            _ => Ok(()),
         }
-        Ok(())
+    }
+
+    #[must_use]
+    pub fn has_reply(&self) -> bool {
+        self.id().has_reply()
+    }
+
+    fn id(&self) -> CommandId {
+        #[allow(clippy::enum_glob_use)]
+        use Command::*;
+
+        match self {
+            FwVersion => CommandId::FwVersion,
+            GetValues => CommandId::GetValues,
+            SetDuty(_) => CommandId::SetDuty,
+            SetCurrent(_) => CommandId::SetCurrent,
+            SetCurrentBrake(_) => CommandId::SetCurrentBrake,
+            SetRpm(_) => CommandId::SetRpm,
+            SetPos(_) => CommandId::SetPos,
+            SetHandbrake(_) => CommandId::SetHandbrake,
+            Reboot => CommandId::Reboot,
+            Alive => CommandId::Alive,
+            ForwardCan(..) => CommandId::ForwardCan,
+            GetValuesSelective(_) => CommandId::GetValuesSelective,
+            GetValuesSetupSelective(_) => CommandId::GetValuesSetupSelective,
+            SetCurrentRel(_) => CommandId::SetCurrentRel,
+            SetOdometer(_) => CommandId::SetOdometer,
+            GetStats(_) => CommandId::GetStats,
+            ResetStats(_) => CommandId::ResetStats,
+            Shutdown(..) => CommandId::Shutdown,
+            FwInfo => CommandId::FwInfo,
+            MotorEstop(_) => CommandId::MotorEstop,
+        }
     }
 }
 
@@ -419,7 +419,9 @@ pub enum FaultCode {
 }
 
 impl FaultCode {
+    #[must_use]
     pub fn as_str(&self) -> &'static str {
+        #[allow(clippy::enum_glob_use)]
         use FaultCode::*;
 
         match self {
@@ -460,6 +462,7 @@ impl FaultCode {
 
 impl From<u8> for FaultCode {
     fn from(value: u8) -> Self {
+        #[allow(clippy::enum_glob_use)]
         use FaultCode::*;
 
         match value {
@@ -583,11 +586,13 @@ pub struct FwVersion {
 }
 
 impl FwVersion {
+    #[must_use]
     pub fn hw_name(&self) -> Option<&str> {
         let cstr = CStr::from_bytes_until_nul(&self.hw_name).ok()?;
         cstr.to_str().ok()
     }
 
+    #[must_use]
     pub fn fw_name(&self) -> Option<&str> {
         let cstr = CStr::from_bytes_until_nul(&self.fw_name).ok()?;
         cstr.to_str().ok()
@@ -606,11 +611,13 @@ pub struct FwInfo {
 }
 
 impl FwInfo {
+    #[must_use]
     pub fn commit_hash(&self) -> Option<&str> {
         let cstr = CStr::from_bytes_until_nul(&self.commit_hash).ok()?;
         cstr.to_str().ok()
     }
 
+    #[must_use]
     pub fn user_commit_hash(&self) -> Option<&str> {
         let cstr = CStr::from_bytes_until_nul(&self.user_commit_hash).ok()?;
         cstr.to_str().ok()
@@ -792,7 +799,7 @@ impl CommandReply {
             tachometer: unpacker.unpack_i32()?,
             tachometer_abs: unpacker.unpack_i32()?,
             fault_code: unpacker.unpack_u8()?.into(),
-            pid_pos: unpacker.unpack_f32(1000000.0)?,
+            pid_pos: unpacker.unpack_f32(1_000_000.0)?,
             controller_id: unpacker.unpack_u8()?,
             temp_mosfet1: unpacker.unpack_f16(10.0)?,
             temp_mosfet2: unpacker.unpack_f16(10.0)?,
@@ -857,7 +864,7 @@ impl CommandReply {
             values.fault_code = unpacker.unpack_u8()?.into();
         }
         if mask.contains(ValuesMask::PID_POS) {
-            values.pid_pos = unpacker.unpack_f32(1000000.0)?;
+            values.pid_pos = unpacker.unpack_f32(1_000_000.0)?;
         }
         if mask.contains(ValuesMask::CONTROLLER_ID) {
             values.controller_id = unpacker.unpack_u8()?;
@@ -929,7 +936,7 @@ impl CommandReply {
             values.distance_abs = unpacker.unpack_f32(1000.0)?;
         }
         if mask.contains(ValuesSetupMask::PID_POS) {
-            values.pid_pos = unpacker.unpack_f32(1000000.0)?;
+            values.pid_pos = unpacker.unpack_f32(1_000_000.0)?;
         }
         if mask.contains(ValuesSetupMask::FAULT_CODE) {
             values.fault_code = unpacker.unpack_u8()?.into();
@@ -955,39 +962,40 @@ impl CommandReply {
 
     fn unpack_get_stats(unpacker: &mut Unpacker) -> Result<Self, DecodeError> {
         let mut stats = Stats::default();
-        let mask = unpacker.unpack_u32()?;
+        #[allow(clippy::cast_possible_truncation)]
+        let mask = unpacker.unpack_u32()? as u16;
 
-        if mask & (StatsMask::SPEED_AVG.bits() as u32) != 0 {
+        if mask & (StatsMask::SPEED_AVG.bits()) != 0 {
             stats.speed_avg = unpacker.unpack_f32_auto()?;
         }
-        if mask & (StatsMask::SPEED_MAX.bits() as u32) != 0 {
+        if mask & (StatsMask::SPEED_MAX.bits()) != 0 {
             stats.speed_max = unpacker.unpack_f32_auto()?;
         }
-        if mask & (StatsMask::POWER_AVG.bits() as u32) != 0 {
+        if mask & (StatsMask::POWER_AVG.bits()) != 0 {
             stats.power_avg = unpacker.unpack_f32_auto()?;
         }
-        if mask & (StatsMask::POWER_MAX.bits() as u32) != 0 {
+        if mask & (StatsMask::POWER_MAX.bits()) != 0 {
             stats.power_max = unpacker.unpack_f32_auto()?;
         }
-        if mask & (StatsMask::CURRENT_AVG.bits() as u32) != 0 {
+        if mask & (StatsMask::CURRENT_AVG.bits()) != 0 {
             stats.current_avg = unpacker.unpack_f32_auto()?;
         }
-        if mask & (StatsMask::CURRENT_MAX.bits() as u32) != 0 {
+        if mask & (StatsMask::CURRENT_MAX.bits()) != 0 {
             stats.current_max = unpacker.unpack_f32_auto()?;
         }
-        if mask & (StatsMask::TEMP_MOSFET_AVG.bits() as u32) != 0 {
+        if mask & (StatsMask::TEMP_MOSFET_AVG.bits()) != 0 {
             stats.temp_mosfet_avg = unpacker.unpack_f32_auto()?;
         }
-        if mask & (StatsMask::TEMP_MOSFET_MAX.bits() as u32) != 0 {
+        if mask & (StatsMask::TEMP_MOSFET_MAX.bits()) != 0 {
             stats.temp_mosfet_max = unpacker.unpack_f32_auto()?;
         }
-        if mask & (StatsMask::TEMP_MOTOR_AVG.bits() as u32) != 0 {
+        if mask & (StatsMask::TEMP_MOTOR_AVG.bits()) != 0 {
             stats.temp_motor_avg = unpacker.unpack_f32_auto()?;
         }
-        if mask & (StatsMask::TEMP_MOTOR_MAX.bits() as u32) != 0 {
+        if mask & (StatsMask::TEMP_MOTOR_MAX.bits()) != 0 {
             stats.temp_motor_max = unpacker.unpack_f32_auto()?;
         }
-        if mask & (StatsMask::COUNT_TIME.bits() as u32) != 0 {
+        if mask & (StatsMask::COUNT_TIME.bits()) != 0 {
             stats.count_time = unpacker.unpack_f32_auto()?;
         }
         Ok(CommandReply::GetStats(stats))
@@ -1025,13 +1033,14 @@ impl CommandReply {
 ///     _ => (),
 ///  }
 /// ```
+#[allow(clippy::missing_errors_doc)]
 pub fn encode(command: Command, buf: &mut [u8]) -> Result<usize, EncodeError> {
     let mut packer = Packer::new(buf);
     packer.pack_u8(FRAME_START_SHORT)?;
     packer.pack_u8(0)?;
     command.pack_into(&mut packer)?;
     let payload_len = packer.pos - 2;
-    packer.buf[1] = payload_len as u8;
+    packer.buf[1] = u8::try_from(payload_len).unwrap_or(u8::MAX);
     packer.pack_u16(CRC16.checksum(&packer.buf[2..2 + payload_len]))?;
     packer.pack_u8(FRAME_END)?;
     Ok(packer.pos)
@@ -1055,6 +1064,7 @@ pub fn encode(command: Command, buf: &mut [u8]) -> Result<usize, EncodeError> {
 ///     _ => (),
 /// }
 /// ```
+#[allow(clippy::missing_errors_doc)]
 pub fn decode(buf: &[u8]) -> Result<(usize, CommandReply), DecodeError> {
     let mut unpacker = Unpacker::new(buf);
 

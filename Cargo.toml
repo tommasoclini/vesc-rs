@@ -26,9 +26,15 @@ postcard = ["dep:postcard-schema"]
 bitflags = { version = "2.9" }
 crc = { version = "3.3" }
 defmt = { version = "1.0", optional = true }
+embassy-futures = "0.1.2"
+embedded-hal-async = "1.0.0"
+embedded-io-async = "0.7.0"
 postcard-schema = { version = "0.2.5", optional = true, features = ["derive"] }
 serde = { version = "1.0.228", default-features = false, optional = true, features = ["derive"] }
 thiserror = { version = "2.0", default-features = false }
 
 [dev-dependencies]
 googletest = "0.14"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }

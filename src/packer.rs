@@ -38,6 +38,7 @@ impl<'a> Packer<'a> {
 
     #[inline]
     pub fn pack_f32(&mut self, value: f32, scale: f32) -> Result<(), EncodeError> {
+        #[allow(clippy::cast_possible_truncation)]
         self.pack_i32((value * scale) as i32)
     }
 
@@ -96,12 +97,13 @@ impl<'a> Unpacker<'a> {
 
     #[inline]
     pub fn unpack_f32(&mut self, scale: f32) -> Result<f32, DecodeError> {
+        #[allow(clippy::cast_precision_loss)]
         Ok(self.unpack_i32()? as f32 / scale)
     }
 
     #[inline]
     pub fn unpack_f16(&mut self, scale: f32) -> Result<f32, DecodeError> {
-        Ok(self.unpack_i16()? as f32 / scale)
+        Ok(f32::from(self.unpack_i16()?) / scale)
     }
 
     #[inline]
@@ -112,7 +114,7 @@ impl<'a> Unpacker<'a> {
     #[inline]
     pub fn unpack_c_string<const N: usize>(&mut self) -> Result<[u8; N], DecodeError> {
         let mut buf = [0u8; N];
-        for slot in buf.iter_mut() {
+        for slot in &mut buf {
             *slot = self.unpack_u8()?;
             if *slot == 0 {
                 return Ok(buf);

@@ -27,7 +27,8 @@ impl Default for Decoder<512> {
 
 impl<const BUFLEN: usize> Decoder<BUFLEN> {
     /// Creates a new decoder with an empty internal buffer.
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             buf: [0; BUFLEN],
             rpos: 0,
@@ -43,6 +44,7 @@ impl<const BUFLEN: usize> Decoder<BUFLEN> {
     ///
     /// The decoder automatically manages buffer space by compacting processed
     /// data and will reset if a single frame exceeds buffer capacity.
+    #[allow(clippy::missing_errors_doc)]
     pub fn feed(&mut self, data: &[u8]) -> Result<usize, DecodeError> {
         if data.len() > self.buf.len().saturating_sub(self.wpos) {
             self.buf.copy_within(self.rpos..self.wpos, 0);
