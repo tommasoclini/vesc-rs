@@ -47,7 +47,8 @@ pub enum DecodeError {
 }
 
 #[repr(u8)]
-enum CommandId {
+#[derive(PartialEq)]
+pub enum CommandId {
     FwVersion = 0,
     GetValues = 4,
     SetDuty = 5,
@@ -68,26 +69,6 @@ enum CommandId {
     Shutdown = 156,
     FwInfo = 157,
     MotorEstop = 159,
-}
-
-impl CommandId {
-    fn has_reply(&self) -> bool {
-        #[allow(clippy::enum_glob_use)]
-        use CommandId::*;
-
-        match self {
-            FwVersion
-            | GetValues
-            | GetValuesSelective
-            | GetValuesSetupSelective
-            | ResetStats
-            | FwInfo => true,
-
-            SetDuty | SetCurrent | SetCurrentBrake | SetRpm | SetPos | SetHandbrake | Reboot
-            | Alive | ForwardCan | SetCurrentRel | SetOdometer | GetStats | Shutdown
-            | MotorEstop => false,
-        }
-    }
 }
 
 impl TryFrom<u8> for CommandId {
@@ -341,11 +322,7 @@ impl Command<'_> {
     }
 
     #[must_use]
-    pub fn has_reply(&self) -> bool {
-        self.id().has_reply()
-    }
-
-    fn id(&self) -> CommandId {
+    pub fn id(&self) -> CommandId {
         #[allow(clippy::enum_glob_use)]
         use Command::*;
 
@@ -746,6 +723,22 @@ pub enum CommandReply {
 }
 
 impl CommandReply {
+    #[must_use]
+    pub const fn id(&self) -> CommandId {
+        #[allow(clippy::enum_glob_use)]
+        use CommandReply::*;
+
+        match self {
+            FwVersion(_) => CommandId::FwVersion,
+            GetValues(_) => CommandId::GetValues,
+            GetValuesSelective(_) => CommandId::GetValuesSelective,
+            GetValuesSetupSelective(_) => CommandId::GetValuesSetupSelective,
+            GetStats(_) => CommandId::GetStats,
+            ResetStats => CommandId::ResetStats,
+            FwInfo(_) => CommandId::FwInfo,
+        }
+    }
+
     fn unpack_from(unpacker: &mut Unpacker) -> Result<Self, DecodeError> {
         Ok(match unpacker.unpack_u8()?.try_into()? {
             CommandId::FwVersion => Self::unpack_fw_version(unpacker)?,

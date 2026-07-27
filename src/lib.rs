@@ -48,6 +48,7 @@
 //! }
 //! ```
 #![cfg_attr(not(feature = "std"), no_std)]
+#![allow(clippy::missing_errors_doc)]
 
 mod command;
 mod decoder;
@@ -56,6 +57,7 @@ mod packer;
 pub use command::{
     //
     Command,
+    CommandId,
     CommandReply,
     DecodeError,
     EncodeError,
@@ -77,118 +79,189 @@ pub use command::{
 };
 pub use decoder::Decoder;
 
-use core::num::NonZeroU32;
-use embedded_hal_async::delay::DelayNs;
+use core::{pin::pin, task::Poll};
+
+use embassy_sync::{blocking_mutex::raw::RawMutex, signal::Signal};
+use maitake_sync::Mutex;
+use mutex::{ConstInit, ScopedRawMutex};
+use pinlist::blocking::{Node, PinList};
+
+use embassy_futures::select::{Either, select};
+
 use embedded_io_async::{BufRead, Write};
 use thiserror::Error;
 
-pub struct Vesc<W: Write, R: BufRead> {
+struct Subscriber<EM: RawMutex> {
+    reply: Option<Signal<EM, CommandReply>>,
+    id: CommandId,
+}
+
+impl<EM: RawMutex> Subscriber<EM> {
+    pub fn new(id: CommandId) -> Self {
+        Self {
+            reply: Some(Signal::new()),
+            id,
+        }
+    }
+}
+
+pub struct Vesc<W: Write, R: BufRead, M: ScopedRawMutex, EM: RawMutex> {
+    tx: Mutex<Tx<W>>,
+    rx: Mutex<Rx<R>>,
+
+    subscribers: PinList<M, Subscriber<EM>>,
+}
+
+impl<W: Write, R: BufRead, M: ScopedRawMutex + ConstInit, EM: RawMutex + Unpin> Vesc<W, R, M, EM> {
+    pub const fn new(rx: R, tx: W) -> Self {
+        Self {
+            tx: Mutex::new(Tx::new(tx)),
+            rx: Mutex::new(Rx::new(rx)),
+            subscribers: PinList::new(),
+        }
+    }
+
+    /// sends command and does not wait for a reply
+    pub async fn command(&self, cmd: Command<'_>) -> Result<(), VescError<W::Error, R::Error>> {
+        self.tx
+            .lock()
+            .await
+            .command(cmd)
+            .await
+            .map_err(VescError::Tx)
+    }
+
+    /// waits for a reply with provided id
+    ///
+    /// # Panics
+    pub async fn wait_for_reply(
+        &self,
+        id: CommandId,
+    ) -> Result<CommandReply, VescError<W::Error, R::Error>> {
+        let sub = pin!(Node::new_for(&self.subscribers, Subscriber::new(id)));
+        let hdl = sub.attach();
+
+        match select(
+            core::future::poll_fn(|cx| {
+                hdl.with_lock_mut(|s| {
+                    let reply = s
+                        .reply
+                        .as_mut()
+                        .expect("this future must not be polled after it returned Ready");
+                    let r = core::task::ready!(pin!(reply.wait()).poll(cx));
+                    s.reply = None;
+                    Poll::Ready(r)
+                })
+            }),
+            async {
+                let mut rx = self.rx.lock().await;
+
+                loop {
+                    let reply = rx.wait_for_reply().await?;
+                    self.subscribers.with_iter(|subs| {
+                        for sub in subs {
+                            if sub.id == reply.id()
+                                && let Some(sig) = sub.reply.as_ref()
+                                && !sig.signaled()
+                            {
+                                sig.signal(reply);
+                                break;
+                            }
+                        }
+                    });
+                }
+            },
+        )
+        .await
+        {
+            Either::First(reply) => Ok(reply),
+            Either::Second(err) => err,
+        }
+    }
+
+    /// command with single reply
+    ///
+    /// # Arguments
+    ///
+    /// * `timeout_ms` - if set to None, it will use the same id as the sent
+    ///   command, but another id can be chosen.
+    pub async fn command_with_reply(
+        &self,
+        cmd: Command<'_>,
+        reply_id: Option<CommandId>,
+    ) -> Result<CommandReply, VescError<W::Error, R::Error>> {
+        self.command(cmd).await?;
+        self.wait_for_reply(reply_id.unwrap_or_else(|| cmd.id()))
+            .await
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum VescError<TxEio, RxEio> {
+    Other,
+    Tx(#[from] TxError<TxEio>),
+    Rx(#[from] RxError<RxEio>),
+}
+
+struct Tx<W: Write> {
     tx: W,
-    tx_timeout_ms: Option<NonZeroU32>,
-    rx: R,
-    rx_timeout_ms: Option<NonZeroU32>,
-    out_buf: [u8; 518],
+    buf: [u8; 518],
+}
+
+#[derive(Error, Debug)]
+pub enum TxError<EioErr> {
+    Other,
+    Encoding(#[from] EncodeError),
+    Eio(EioErr),
+}
+
+impl<W: Write> Tx<W> {
+    const fn new(tx: W) -> Self {
+        Self { tx, buf: [0; 518] }
+    }
+
+    async fn command(&mut self, cmd: Command<'_>) -> Result<(), TxError<W::Error>> {
+        let s = encode(cmd, &mut self.buf)?;
+        self.tx
+            .write_all(&self.buf[..s])
+            .await
+            .map_err(TxError::Eio)?;
+        Ok(())
+    }
+}
+
+struct Rx<W: BufRead> {
+    rx: W,
     decoder: Decoder<518>,
 }
 
 #[derive(Error, Debug)]
-pub enum VescError<TxErr, RxErr> {
+pub enum RxError<EioErr> {
     Other,
-    Encoding(#[from] EncodeError),
     Decoding(#[from] DecodeError),
-    Tx(TxErr),
-    TxTimeout,
-    Rx(RxErr),
-    RxTimeout,
-    RxEof,
+    Eio(EioErr),
+    Eof,
 }
 
-impl<W: Write, R: BufRead> Vesc<W, R> {
-    pub const fn new(
-        tx: W,
-        rx: R,
-        rx_timeout_ms: Option<NonZeroU32>,
-        tx_timeout_ms: Option<NonZeroU32>,
-    ) -> Self {
+impl<R: BufRead> Rx<R> {
+    const fn new(rx: R) -> Self {
         Self {
-            tx,
             rx,
-            out_buf: [0; 518],
             decoder: Decoder::new(),
-            tx_timeout_ms,
-            rx_timeout_ms,
         }
     }
 
-    pub fn set_timeouts(
-        &mut self,
-        rx_timeout_ms: Option<NonZeroU32>,
-        tx_timeout_ms: Option<NonZeroU32>,
-    ) {
-        self.rx_timeout_ms = rx_timeout_ms;
-        self.tx_timeout_ms = tx_timeout_ms;
-    }
-
-    #[allow(clippy::missing_errors_doc)]
-    pub async fn command(
-        &mut self,
-        cmd: Command<'_>,
-        mut delay: Option<impl DelayNs>,
-    ) -> Result<Option<CommandReply>, VescError<W::Error, R::Error>> {
-        let s = encode(cmd, &mut self.out_buf)?;
-
-        let tx_fut = self.tx.write_all(&self.out_buf[..s]);
-
-        (if let Some(delay) = &mut delay
-            && let Some(tx_timeout) = self.tx_timeout_ms
-        {
-            with_timeout_ms(delay, tx_timeout.get(), tx_fut)
-                .await
-                .ok_or(VescError::TxTimeout)?
-        } else {
-            tx_fut.await
-        })
-        .map_err(VescError::Tx)?;
-
-        if cmd.has_reply() {
-            let rx_fut = async {
-                loop {
-                    let data = self.rx.fill_buf().await.map_err(VescError::Rx)?;
-                    if data.is_empty() {
-                        break Err(VescError::RxEof);
-                    }
-                    let size = self.decoder.feed(data)?;
-                    self.rx.consume(size);
-                    if let Some(r) = self.decoder.next() {
-                        break Ok(Some(r));
-                    }
-                }
-            };
-
-            if let Some(delay) = &mut delay
-                && let Some(rx_timeout) = self.rx_timeout_ms
-            {
-                with_timeout_ms(delay, rx_timeout.get(), rx_fut)
-                    .await
-                    .ok_or(VescError::RxTimeout)?
-            } else {
-                rx_fut.await
+    async fn wait_for_reply(&mut self) -> Result<CommandReply, RxError<R::Error>> {
+        loop {
+            let data = self.rx.fill_buf().await.map_err(RxError::Eio)?;
+            if data.is_empty() {
+                break Err(RxError::Eof);
             }
-        } else {
-            Ok(None)
+            let size = self.decoder.feed(data)?;
+            self.rx.consume(size);
+            if let Some(r) = self.decoder.next() {
+                break Ok(r);
+            }
         }
-    }
-}
-
-async fn with_timeout_ms<T, F: Future<Output = T>>(
-    mut delay: impl DelayNs,
-    timeout_ms: u32,
-    fut: F,
-) -> Option<T> {
-    use embassy_futures::select::Either;
-
-    match embassy_futures::select::select(delay.delay_ms(timeout_ms), fut).await {
-        Either::Second(out) => Some(out),
-        Either::First(()) => None,
     }
 }
