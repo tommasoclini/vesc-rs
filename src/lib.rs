@@ -81,7 +81,10 @@ pub use decoder::Decoder;
 
 use core::{pin::pin, task::Poll};
 
-use embassy_sync::{blocking_mutex::raw::RawMutex, signal::Signal};
+use embassy_sync::{
+    blocking_mutex::raw::{NoopRawMutex, RawMutex},
+    signal::Signal,
+};
 use maitake_sync::Mutex;
 use mutex::{ConstInit, ScopedRawMutex};
 use pinlist::blocking::{Node, PinList};
@@ -105,14 +108,14 @@ impl<EM: RawMutex> Subscriber<EM> {
     }
 }
 
-pub struct Vesc<W: Write, R: BufRead, M: ScopedRawMutex, EM: RawMutex> {
+pub struct Vesc<W: Write, R: BufRead, M: ScopedRawMutex> {
     tx: Mutex<Tx<W>>,
     rx: Mutex<Rx<R>>,
 
-    subscribers: PinList<M, Subscriber<EM>>,
+    subscribers: PinList<M, Subscriber<NoopRawMutex>>,
 }
 
-impl<W: Write, R: BufRead, M: ScopedRawMutex + ConstInit, EM: RawMutex + Unpin> Vesc<W, R, M, EM> {
+impl<W: Write, R: BufRead, M: ScopedRawMutex + ConstInit> Vesc<W, R, M> {
     pub const fn new(rx: R, tx: W) -> Self {
         Self {
             tx: Mutex::new(Tx::new(tx)),
