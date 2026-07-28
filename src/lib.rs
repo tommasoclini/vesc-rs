@@ -85,7 +85,7 @@ use embassy_sync::{
     blocking_mutex::raw::{NoopRawMutex, RawMutex},
     signal::Signal,
 };
-use maitake_sync::Mutex;
+use maitake_sync::{Mutex, blocking::DefaultMutex};
 use mutex::{ConstInit, ScopedRawMutex};
 use pinlist::blocking::{Node, PinList};
 
@@ -108,7 +108,7 @@ impl<EM: RawMutex> Subscriber<EM> {
     }
 }
 
-pub struct Vesc<W: Write, R: BufRead, M: ScopedRawMutex> {
+pub struct Vesc<W: Write, R: BufRead, M: ScopedRawMutex = DefaultMutex> {
     tx: Mutex<Tx<W>>,
     rx: Mutex<Rx<R>>,
 
